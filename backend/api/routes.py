@@ -8,12 +8,9 @@ import os
 sys.path.insert(0, str(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 import json
-import torch
-import numpy as np
-import pandas as pd
 from pathlib import Path
 from typing import Dict, Any, List
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException
 
 from config.config import (
     DATASET_PATH, RESULTS_DIR, ARTIFACTS_DIR, EXPECTED_COLUMNS,
@@ -27,25 +24,36 @@ from backend.schemas.schemas import (
     GraphSampleResponse, GraphStatsResponse,
     GlobalExplanationResponse, PatientInput, PredictionResponse
 )
-from backend.services.prediction_service import prediction_service
-from ml.preprocessing.preprocessor import DataPreprocessor
-from ml.graph.graph_builder import PatientGraphBuilder
+
+# Lazy getter — heavy imports (torch, sklearn, etc.) happen only on first request
+_prediction_service = None
+
+def get_prediction_service():
+    global _prediction_service
+    if _prediction_service is None:
+        from backend.services.prediction_service import PredictionService
+        _prediction_service = PredictionService()
+    return _prediction_service
 
 router = APIRouter(prefix="/api", tags=["FedGraph-Diabetes"])
 
 
+
 @router.get("/health", response_model=HealthResponse)
 def get_health():
+    import torch
     dataset_exists = DATASET_PATH.exists()
-    available_models = prediction_service.get_available_models()
+    svc = get_prediction_service()
+    available_models = svc.get_available_models()
     models_trained = len(available_models) > 0
     device = "MPS (Apple Silicon)" if torch.backends.mps.is_available() else "CPU"
 
     demo_mode = False
     if not dataset_exists:
         demo_mode = True
-    elif (ARTIFACTS_DIR / 'preprocessor.pkl').exists():
+    elif (ARTIFACTS_DIR / 'preprocessing.pkl').exists():
         try:
+            from ml.preprocessing.preprocessor import DataPreprocessor
             p = DataPreprocessor.load_artifacts()
             demo_mode = p.demo_mode
         except Exception:
@@ -68,9 +76,8 @@ def get_dataset_summary():
         with open(summary_file, 'r') as f:
             data = json.load(f)
             return DatasetSummary(**data)
-    
-    # Generate on the fly if needed
     try:
+        from ml.preprocessing.preprocessor import DataPreprocessor
         p = DataPreprocessor().fit()
         p.save_artifacts()
         return DatasetSummary(**p.get_summary())
@@ -82,7 +89,6 @@ def get_dataset_summary():
 def get_dataset_features():
     features = []
     feature_cols = [c for c in EXPECTED_COLUMNS if c != TARGET_COLUMN]
-    
     for col in feature_cols:
         desc = FEATURE_DESCRIPTIONS.get(col, col)
         if col in BINARY_FEATURES:
@@ -122,17 +128,10 @@ def get_dataset_features():
                 min_v, max_v, def_v = 1.0, 8.0, 6.0
             else:
                 min_v, max_v, def_v = 1.0, 10.0, 1.0
-
         features.append(FeatureInfo(
-            name=col,
-            description=desc,
-            type=ftype,
-            min_value=min_v,
-            max_value=max_v,
-            default_value=def_v,
-            options=opts
+            name=col, description=desc, type=ftype,
+            min_value=min_v, max_value=max_v, default_value=def_v, options=opts
         ))
-
     return features
 
 
@@ -151,15 +150,12 @@ def get_model_comparison():
     metrics_file = RESULTS_DIR / 'metrics.json'
     if not metrics_file.exists():
         return ModelComparisonResponse(
-            status="not_trained",
-            models={},
+            status="not_trained", models={},
             base_paper_comparison=BASE_PAPER_RESULTS,
             note="Models have not been trained yet. Please execute training scripts."
         )
-
     with open(metrics_file, 'r') as f:
         metrics_data = json.load(f)
-
     flat_models = {}
     if 'baselines' in metrics_data:
         flat_models.update(metrics_data['baselines'])
@@ -169,10 +165,8 @@ def get_model_comparison():
         flat_models['federated_fedavg'] = metrics_data['federated_fedavg']
     if 'federated_fedprox' in metrics_data:
         flat_models['federated_fedprox'] = metrics_data['federated_fedprox']
-
     return ModelComparisonResponse(
-        status="ready",
-        models=flat_models,
+        status="ready", models=flat_models,
         base_paper_comparison=BASE_PAPER_RESULTS,
         note="Comparison of all evaluated models against base paper reported metrics."
     )
@@ -182,12 +176,10 @@ def get_model_comparison():
 def get_federated_status():
     history_file = RESULTS_DIR / 'training_history.json'
     metrics_file = RESULTS_DIR / 'metrics.json'
-
     history_data = {}
     if history_file.exists():
         with open(history_file, 'r') as f:
             history_data = json.load(f)
-
     latest_metrics = {}
     if metrics_file.exists():
         with open(metrics_file, 'r') as f:
@@ -196,16 +188,12 @@ def get_federated_status():
                 latest_metrics['fedavg'] = m_data['federated_fedavg']
             if 'federated_fedprox' in m_data:
                 latest_metrics['fedprox'] = m_data['federated_fedprox']
-
     available_methods = [k for k in ['fedavg', 'fedprox'] if k in history_data or f'federated_{k}' in latest_metrics]
-
     return FederatedStatusResponse(
         status="ready" if available_methods else "not_trained",
         available_methods=available_methods,
-        num_clients=NUM_CLIENTS,
-        client_names=CLIENT_NAMES,
-        history=history_data,
-        latest_metrics=latest_metrics
+        num_clients=NUM_CLIENTS, client_names=CLIENT_NAMES,
+        history=history_data, latest_metrics=latest_metrics
     )
 
 
@@ -220,47 +208,42 @@ def get_federated_history():
 
 @router.get("/graph/statistics", response_model=GraphStatsResponse)
 def get_graph_statistics():
+    from ml.preprocessing.preprocessor import DataPreprocessor
+    from ml.graph.graph_builder import PatientGraphBuilder
     pt_path = ARTIFACTS_DIR / 'edge_index.pt'
     if not pt_path.exists():
-        # Compute stats from preprocessor if available
         try:
             p = DataPreprocessor.load_artifacts()
         except Exception:
             p = DataPreprocessor().fit()
-        
         split = p.get_split_data()
         builder = PatientGraphBuilder(k=10)
-        builder.build_graph(split['X_train'][:500])  # Quick sample stats
+        builder.build_graph(split['X_train'][:500])
         return GraphStatsResponse(**builder.get_statistics())
-
     builder = PatientGraphBuilder.load(k=10)
     return GraphStatsResponse(**builder.get_statistics())
 
 
 @router.get("/graph/sample", response_model=GraphSampleResponse)
 def get_graph_sample(n_nodes: int = 120):
+    from ml.preprocessing.preprocessor import DataPreprocessor
+    from ml.graph.graph_builder import PatientGraphBuilder
     try:
         p = DataPreprocessor.load_artifacts()
     except Exception:
         p = DataPreprocessor().fit()
-    
     split = p.get_split_data()
     X_train = split['X_train']
     y_train = split['y_train']
-
     builder = PatientGraphBuilder(k=8)
     sub_X = X_train[:n_nodes]
     sub_y = y_train[:n_nodes]
     builder.build_graph(sub_X)
-    
     sample = builder.get_sample_graph(n_nodes=n_nodes, labels=sub_y)
-    
     return GraphSampleResponse(
-        nodes=sample['nodes'],
-        edges=sample['edges'],
+        nodes=sample['nodes'], edges=sample['edges'],
         total_graph_nodes=len(X_train),
-        total_graph_edges=builder.num_edges,
-        k_neighbors=8
+        total_graph_edges=builder.num_edges, k_neighbors=8
     )
 
 
@@ -292,7 +275,7 @@ def predict_patient(patient_input: PatientInput):
     data_dict = patient_input.dict()
     model_choice = data_dict.pop('model_choice', 'fedavg_graphsage')
     try:
-        result = prediction_service.predict(data_dict, model_choice=model_choice)
+        result = get_prediction_service().predict(data_dict, model_choice=model_choice)
         return PredictionResponse(**result)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

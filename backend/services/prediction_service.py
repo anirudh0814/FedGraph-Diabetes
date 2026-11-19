@@ -237,6 +237,6 @@ class PredictionService:
             "disclaimer": "RESEARCH PROTOTYPE ONLY: This prediction is for educational/academic purposes and does not constitute a medical diagnosis."
         }
 
-
-# Global singleton
-prediction_service = PredictionService()
+# NOTE: No module-level singleton here.
+# PredictionService is instantiated lazily via get_prediction_service() in routes.py.
+# This allows uvicorn to bind the port immediately without waiting for torch/sklearn to load.
