@@ -86,6 +86,65 @@ class PredictionService:
             self.loaded_models[model_name] = model
             return model
 
+    def _domain_knowledge_probability(self, patient_data: dict) -> float:
+        """
+        Compute a purely clinical domain-knowledge-based probability (0 to 1).
+        Used to blend with GNN probability and correct for synthetic-data unreliability.
+        """
+        RISK_CONFIG = {
+            'HighBP':               {'weight': 0.90, 'risk_if_high': True,  'max': 1},
+            'HighChol':             {'weight': 0.80, 'risk_if_high': True,  'max': 1},
+            'BMI':                  {'weight': 0.85, 'risk_if_high': True,  'max': 98, 'min': 0},
+            'Smoker':               {'weight': 0.55, 'risk_if_high': True,  'max': 1},
+            'Stroke':               {'weight': 0.65, 'risk_if_high': True,  'max': 1},
+            'HeartDiseaseorAttack': {'weight': 0.70, 'risk_if_high': True,  'max': 1},
+            'PhysActivity':         {'weight': 0.75, 'risk_if_high': False, 'max': 1},
+            'Fruits':               {'weight': 0.30, 'risk_if_high': False, 'max': 1},
+            'Veggies':              {'weight': 0.30, 'risk_if_high': False, 'max': 1},
+            'HvyAlcoholConsump':    {'weight': 0.45, 'risk_if_high': True,  'max': 1},
+            'AnyHealthcare':        {'weight': 0.35, 'risk_if_high': False, 'max': 1},
+            'NoDocbcCost':          {'weight': 0.40, 'risk_if_high': True,  'max': 1},
+            'GenHlth':              {'weight': 1.20, 'risk_if_high': True,  'max': 5, 'min': 1},
+            'MentHlth':             {'weight': 0.35, 'risk_if_high': True,  'max': 30},
+            'PhysHlth':             {'weight': 0.40, 'risk_if_high': True,  'max': 30},
+            'DiffWalk':             {'weight': 0.60, 'risk_if_high': True,  'max': 1},
+            'Sex':                  {'weight': 0.20, 'risk_if_high': True,  'max': 1},
+            'Age':                  {'weight': 0.80, 'risk_if_high': True,  'max': 13, 'min': 1},
+            'Education':            {'weight': 0.35, 'risk_if_high': False, 'max': 6,  'min': 1},
+            'Income':               {'weight': 0.40, 'risk_if_high': False, 'max': 8,  'min': 1},
+            'CholCheck':            {'weight': 0.25, 'risk_if_high': False, 'max': 1},
+        }
+
+        total_risk_weight = 0.0
+        total_possible_weight = 0.0
+
+        for feat, cfg in RISK_CONFIG.items():
+            val = float(patient_data.get(feat, 0.0))
+            min_v = cfg.get('min', 0.0)
+            max_v = cfg.get('max', 1.0)
+            denom = max(max_v - min_v, 1)
+
+            if feat == 'BMI':
+                norm = max(0.0, min(1.0, (val - 18.5) / (45.0 - 18.5)))
+            else:
+                norm = max(0.0, min(1.0, (val - min_v) / denom))
+
+            w = cfg['weight']
+            total_possible_weight += w
+
+            if cfg['risk_if_high']:
+                total_risk_weight += norm * w         # high value = risk
+            else:
+                total_risk_weight += (1.0 - norm) * w  # low value = risk (inverse protective)
+
+        if total_possible_weight == 0:
+            return 0.5
+        raw = total_risk_weight / total_possible_weight
+        # Sigmoid-like stretch to push extremes to 0/1
+        import math
+        stretched = 1.0 / (1.0 + math.exp(-10 * (raw - 0.5)))
+        return round(stretched, 4)
+
     def _domain_knowledge_explanation(self, patient_data: dict, feature_cols: list, prob: float) -> dict:
         """
         Compute medically correct feature contributions based on clinical domain knowledge.
@@ -102,13 +161,13 @@ class PredictionService:
             'Smoker':               {'weight': 0.55, 'risk_if_high': True,  'max': 1},
             'Stroke':               {'weight': 0.65, 'risk_if_high': True,  'max': 1},
             'HeartDiseaseorAttack': {'weight': 0.70, 'risk_if_high': True,  'max': 1},
-            'PhysActivity':         {'weight': 0.75, 'risk_if_high': False, 'max': 1},   # Exercise = protective
+            'PhysActivity':         {'weight': 0.75, 'risk_if_high': False, 'max': 1},
             'Fruits':               {'weight': 0.30, 'risk_if_high': False, 'max': 1},
             'Veggies':              {'weight': 0.30, 'risk_if_high': False, 'max': 1},
             'HvyAlcoholConsump':    {'weight': 0.45, 'risk_if_high': True,  'max': 1},
             'AnyHealthcare':        {'weight': 0.35, 'risk_if_high': False, 'max': 1},
             'NoDocbcCost':          {'weight': 0.40, 'risk_if_high': True,  'max': 1},
-            'GenHlth':              {'weight': 1.20, 'risk_if_high': True,  'max': 5, 'min': 1},  # 1=Excellent(good), 5=Poor(bad)
+            'GenHlth':              {'weight': 1.20, 'risk_if_high': True,  'max': 5, 'min': 1},
             'MentHlth':             {'weight': 0.35, 'risk_if_high': True,  'max': 30},
             'PhysHlth':             {'weight': 0.40, 'risk_if_high': True,  'max': 30},
             'DiffWalk':             {'weight': 0.60, 'risk_if_high': True,  'max': 1},
@@ -131,7 +190,6 @@ class PredictionService:
             val = float(patient_data.get(feat, 0.0))
             min_v = cfg.get('min', 0.0)
             max_v = cfg.get('max', 1.0)
-            threshold = cfg.get('threshold', min_v)
 
             # Normalize to 0–1
             denom = max(max_v - min_v, 1)
@@ -143,9 +201,9 @@ class PredictionService:
 
             # Contribution direction
             if cfg['risk_if_high']:
-                contrib = norm * cfg['weight'] * scale   # positive = risk
+                contrib = norm * cfg['weight'] * scale
             else:
-                contrib = -(norm * cfg['weight'] * scale)  # negative = protective
+                contrib = -(norm * cfg['weight'] * scale)
 
             contributions[feat] = round(contrib, 4)
 
@@ -158,7 +216,6 @@ class PredictionService:
         if self.preprocessor is None:
             self._load_preprocessor()
             if self.preprocessor is None:
-                # Preprocess on the fly using default / demo fit
                 self.preprocessor = DataPreprocessor().fit()
                 self.preprocessor.save_artifacts()
 
@@ -197,9 +254,11 @@ class PredictionService:
             # Flip probability — synthetic data trained GNN with inverted labels
             prob = 1.0 - prob
 
-            # Domain-knowledge-based explanation (medically correct)
-            # Gradient explanations from synthetic-trained GNN are unreliable.
-            # Instead, compute contributions based on established clinical risk factors.
+            # Blend GNN probability with domain knowledge probability (40% GNN + 60% clinical)
+            # This corrects synthetic-data unreliability while keeping the GNN's contribution.
+            dk_prob = self._domain_knowledge_probability(patient_data)
+            prob = round(0.40 * prob + 0.60 * dk_prob, 4)
+
             method_used = "Domain Knowledge Risk Scoring (Clinical Evidence-Based)"
             contributions = self._domain_knowledge_explanation(patient_data, feature_cols, prob)
         else:
@@ -214,10 +273,11 @@ class PredictionService:
         # Risk categorization
         if prob < 0.30:
             risk_category = "Low Risk"
-        elif prob < 0.65:
+        elif prob < 0.60:
             risk_category = "Moderate Risk"
         else:
             risk_category = "High Risk"
+
 
         predicted_class = 1 if prob >= 0.5 else 0
 
