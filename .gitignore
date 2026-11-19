@@ -40,8 +40,9 @@ Thumbs.db
 data/*.csv
 data/diabetes_brfss2015_demo.csv
 
-# Model artifacts (large .pt files — keep .pkl baselines, exclude large GNN weights)
-artifacts/*.pt
+# Model artifacts — exclude only the large graph edge index (11MB)
+# Keep GNN model weights (.pt) since they are small (269KB each) and needed for prediction
+artifacts/edge_index.pt
 
 # Logs
 *.log
