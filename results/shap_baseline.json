@@ -1,0 +1,28 @@
+{
+  "model": "gradient_boosting",
+  "method": "SHAP TreeExplainer",
+  "feature_importance": {
+    "PhysActivity": 0.4544553981350748,
+    "Veggies": 0.44982209412266466,
+    "Fruits": 0.42242492471482196,
+    "Income": 0.34185450939870554,
+    "Smoker": 0.2579336663335665,
+    "NoDocbcCost": 0.24669273138269376,
+    "CholCheck": 0.23924115783007924,
+    "HvyAlcoholConsump": 0.23410986514983584,
+    "Sex": 0.22574975957992538,
+    "AnyHealthcare": 0.2039268770178246,
+    "HighBP": 0.14869450721267033,
+    "HighChol": 0.1356996185279961,
+    "GenHlth": 0.05491134407727834,
+    "Age": 0.04466195198827655,
+    "BMI": 0.026007088254138527,
+    "PhysHlth": 0.005373214172859995,
+    "MentHlth": 0.0036017188993941684,
+    "Stroke": 0.0,
+    "HeartDiseaseorAttack": 0.0,
+    "DiffWalk": 0.0,
+    "Education": 0.0
+  },
+  "note": "Global feature importances computed using SHAP TreeExplainer on gradient_boosting model."
+}

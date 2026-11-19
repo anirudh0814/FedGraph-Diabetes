@@ -1,0 +1,3 @@
+"""
+Data README — FedGraph-Diabetes
+"""

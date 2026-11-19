@@ -1,0 +1,203 @@
+{
+  "n_records": 70692,
+  "n_features": 21,
+  "target_column": "Diabetes_binary",
+  "class_distribution": {
+    "no_diabetes": 35346,
+    "diabetes": 35346
+  },
+  "demo_mode": true,
+  "dataset_path": "/Users/chukka/Downloads/capstone/backend/../data/diabetes.csv",
+  "missing_values": 0,
+  "feature_stats": {
+    "HighBP": {
+      "mean": 0.5544191704860522,
+      "std": 0.49703324688481826,
+      "min": 0.0,
+      "max": 1.0,
+      "null_count": 0,
+      "type": "binary",
+      "description": "High Blood Pressure (0=No, 1=Yes)"
+    },
+    "HighChol": {
+      "mean": 0.5526650823289764,
+      "std": 0.49722217004641645,
+      "min": 0.0,
+      "max": 1.0,
+      "null_count": 0,
+      "type": "binary",
+      "description": "High Cholesterol (0=No, 1=Yes)"
+    },
+    "CholCheck": {
+      "mean": 0.5647880948339274,
+      "std": 0.49578824099385044,
+      "min": 0.0,
+      "max": 1.0,
+      "null_count": 0,
+      "type": "binary",
+      "description": "Cholesterol Check in 5 Years (0=No, 1=Yes)"
+    },
+    "BMI": {
+      "mean": 28.631381292580446,
+      "std": 6.505975120036823,
+      "min": 12.0,
+      "max": 54.64172167647043,
+      "null_count": 0,
+      "type": "numeric",
+      "description": "Body Mass Index"
+    },
+    "Smoker": {
+      "mean": 0.5656227012957619,
+      "std": 0.49567846097540996,
+      "min": 0.0,
+      "max": 1.0,
+      "null_count": 0,
+      "type": "binary",
+      "description": "Smoked \u2265100 Cigarettes in Life (0=No, 1=Yes)"
+    },
+    "Stroke": {
+      "mean": 0.1652945170599219,
+      "std": 0.37144877366217416,
+      "min": 0.0,
+      "max": 1.0,
+      "null_count": 0,
+      "type": "binary",
+      "description": "History of Stroke (0=No, 1=Yes)"
+    },
+    "HeartDiseaseorAttack": {
+      "mean": 0.1635828665195496,
+      "std": 0.3698992400858645,
+      "min": 0.0,
+      "max": 1.0,
+      "null_count": 0,
+      "type": "binary",
+      "description": "Heart Disease or Attack (0=No, 1=Yes)"
+    },
+    "PhysActivity": {
+      "mean": 0.6593815424659084,
+      "std": 0.4739205641180906,
+      "min": 0.0,
+      "max": 1.0,
+      "null_count": 0,
+      "type": "binary",
+      "description": "Physical Activity in Past 30 Days (0=No, 1=Yes)"
+    },
+    "Fruits": {
+      "mean": 0.6596644599105981,
+      "std": 0.47382532238938213,
+      "min": 0.0,
+      "max": 1.0,
+      "null_count": 0,
+      "type": "binary",
+      "description": "Fruit Consumption \u22651/Day (0=No, 1=Yes)"
+    },
+    "Veggies": {
+      "mean": 0.6595088553160188,
+      "std": 0.47387772861180194,
+      "min": 0.0,
+      "max": 1.0,
+      "null_count": 0,
+      "type": "binary",
+      "description": "Vegetable Consumption \u22651/Day (0=No, 1=Yes)"
+    },
+    "HvyAlcoholConsump": {
+      "mean": 0.5638544672664516,
+      "std": 0.4959093524517431,
+      "min": 0.0,
+      "max": 1.0,
+      "null_count": 0,
+      "type": "binary",
+      "description": "Heavy Alcohol Consumption (0=No, 1=Yes)"
+    },
+    "AnyHealthcare": {
+      "mean": 0.5668109545634584,
+      "std": 0.49551969660602857,
+      "min": 0.0,
+      "max": 1.0,
+      "null_count": 0,
+      "type": "binary",
+      "description": "Any Healthcare Coverage (0=No, 1=Yes)"
+    },
+    "NoDocbcCost": {
+      "mean": 0.5669665591580377,
+      "std": 0.49549869125384566,
+      "min": 0.0,
+      "max": 1.0,
+      "null_count": 0,
+      "type": "binary",
+      "description": "Unable to See Doctor Due to Cost (0=No, 1=Yes)"
+    },
+    "GenHlth": {
+      "mean": 2.751471170712386,
+      "std": 1.2353259267316254,
+      "min": 1.0,
+      "max": 5.0,
+      "null_count": 0,
+      "type": "ordinal",
+      "description": "General Health (1=Excellent to 5=Poor)"
+    },
+    "MentHlth": {
+      "mean": 4.56039163542735,
+      "std": 6.025639178129171,
+      "min": 2.6072340085221147e-05,
+      "max": 30.0,
+      "null_count": 0,
+      "type": "numeric",
+      "description": "Mental Health Days (0-30 days)"
+    },
+    "PhysHlth": {
+      "mean": 5.3521193182094535,
+      "std": 6.7396695552521075,
+      "min": 9.68906287450713e-06,
+      "max": 30.0,
+      "null_count": 0,
+      "type": "numeric",
+      "description": "Physical Health Days (0-30 days)"
+    },
+    "DiffWalk": {
+      "mean": 0.16346969954167373,
+      "std": 0.36979628352842014,
+      "min": 0.0,
+      "max": 1.0,
+      "null_count": 0,
+      "type": "binary",
+      "description": "Difficulty Walking (0=No, 1=Yes)"
+    },
+    "Sex": {
+      "mean": 0.5660895150794998,
+      "std": 0.4956164350857304,
+      "min": 0.0,
+      "max": 1.0,
+      "null_count": 0,
+      "type": "binary",
+      "description": "Sex (0=Female, 1=Male)"
+    },
+    "Age": {
+      "mean": 7.236405816782663,
+      "std": 3.3635474282375566,
+      "min": 1.0,
+      "max": 13.0,
+      "null_count": 0,
+      "type": "ordinal",
+      "description": "Age Category (1-13, where 1=18-24, 13=80+)"
+    },
+    "Education": {
+      "mean": 3.4912154133423865,
+      "std": 1.7123229762062517,
+      "min": 1.0,
+      "max": 6.0,
+      "null_count": 0,
+      "type": "ordinal",
+      "description": "Education Level (1-6)"
+    },
+    "Income": {
+      "mean": 5.499618061449669,
+      "std": 1.818351940926333,
+      "min": 1.0,
+      "max": 8.0,
+      "null_count": 0,
+      "type": "ordinal",
+      "description": "Income Level (1-8)"
+    }
+  }
+}
