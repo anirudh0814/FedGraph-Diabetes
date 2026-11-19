@@ -253,14 +253,22 @@ class PredictionService:
             x_tensor = torch.tensor(X_scaled, dtype=torch.float32)
             with torch.no_grad():
                 logits = model(x_tensor, empty_edge_index)
-                prob = float(torch.sigmoid(logits).item())
-            # Flip probability — synthetic data trained GNN with inverted labels
-            prob = 1.0 - prob
+                gnn_raw = float(torch.sigmoid(logits).item())
+            # Flip — synthetic-data GNN has inverted labels
+            gnn_prob = 1.0 - gnn_raw
 
-            # Blend GNN probability with domain knowledge probability (40% GNN + 60% clinical)
-            # This corrects synthetic-data unreliability while keeping the GNN's contribution.
+            # Compute clinically-grounded domain knowledge probability
             dk_prob = self._domain_knowledge_probability(patient_data)
-            prob = round(0.40 * prob + 0.60 * dk_prob, 4)
+
+            # Smart override: if GNN and domain knowledge strongly disagree,
+            # trust domain knowledge (GNN was trained on synthetic data with weak correlations)
+            disagreement = abs(gnn_prob - dk_prob)
+            if disagreement > 0.30:
+                # Strong disagreement → domain knowledge wins
+                prob = round(dk_prob, 4)
+            else:
+                # Agreement within 0.3 → weighted blend (25% GNN, 75% clinical)
+                prob = round(0.25 * gnn_prob + 0.75 * dk_prob, 4)
 
             method_used = "Domain Knowledge Risk Scoring (Clinical Evidence-Based)"
             contributions = self._domain_knowledge_explanation(patient_data, feature_cols, prob)
@@ -272,6 +280,7 @@ class PredictionService:
             )
             method_used = explanation["method"]
             contributions = explanation["feature_contributions"]
+
 
         # Risk categorization
         if prob < 0.30:
