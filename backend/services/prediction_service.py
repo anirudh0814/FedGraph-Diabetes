@@ -7,20 +7,20 @@ import sys
 import os
 sys.path.insert(0, str(os.path.join(os.path.dirname(__file__), '..', '..')))
 
+import math
 import pickle
 import numpy as np
 import pandas as pd
-import torch
 from pathlib import Path
-from typing import Dict, Any, Tuple
+from typing import Dict, Any
 
 from config.config import (
     ARTIFACTS_DIR, EXPECTED_COLUMNS, TARGET_COLUMN,
     GRAPHSAGE_HIDDEN_DIM, GRAPHSAGE_NUM_LAYERS, GRAPHSAGE_DROPOUT
 )
+# NOTE: torch, GraphSAGEClassifier, ModelExplainer are imported lazily inside methods
+# so this module loads successfully even if torch-geometric is not installed on Render.
 from ml.preprocessing.preprocessor import DataPreprocessor
-from ml.graph.graphsage_model import GraphSAGEClassifier
-from ml.explainability.explainer import ModelExplainer
 
 
 class PredictionService:
@@ -61,10 +61,14 @@ class PredictionService:
             return self.loaded_models[model_name]
 
         if 'graphsage' in model_name:
+            # Lazy import — torch-geometric may not be installed on Render free tier
+            import torch
+            from ml.graph.graphsage_model import GraphSAGEClassifier
+
             pt_path = ARTIFACTS_DIR / f"{model_name}.pt"
             if not pt_path.exists():
                 raise FileNotFoundError(f"Model file {pt_path} not found.")
-            
+
             in_channels = len([c for c in EXPECTED_COLUMNS if c != TARGET_COLUMN])
             model = GraphSAGEClassifier(
                 in_channels=in_channels,
@@ -256,6 +260,7 @@ class PredictionService:
             model = self.load_model(model_choice)
 
             if 'graphsage' in model_choice:
+                import torch  # lazy — may not be installed on all environments
                 empty_edge_index = torch.empty((2, 0), dtype=torch.long)
                 x_tensor = torch.tensor(X_scaled, dtype=torch.float32)
                 with torch.no_grad():
@@ -275,9 +280,10 @@ class PredictionService:
                 prob = round(dk_prob, 4)
 
         except Exception as e:
-            # GNN failed to load (e.g. OOM on free tier) → use domain knowledge only
-            print(f"[PredictionService] ML model inference failed: {e}. Using domain knowledge.")
+            # ML model failed to load (OOM, missing torch-geometric, etc.) → domain knowledge
+            print(f"[PredictionService] ML inference unavailable: {e}. Using domain knowledge.")
             prob = round(dk_prob, 4)
+
 
         # ── STEP 3: Explanation ───────────────────────────────────────────────────
         method_used = "Domain Knowledge Risk Scoring (Clinical Evidence-Based)"
