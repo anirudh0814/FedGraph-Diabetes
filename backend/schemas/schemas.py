@@ -4,7 +4,7 @@ Pydantic response and request models for FedGraph-Diabetes API.
 """
 
 from typing import Dict, List, Optional, Any, Union
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class HealthResponse(BaseModel):
@@ -155,6 +155,8 @@ class PatientInput(BaseModel):
 
 
 class PredictionResponse(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+    
     probability: float
     risk_category: str
     predicted_class: int
