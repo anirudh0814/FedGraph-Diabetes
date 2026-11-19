@@ -245,44 +245,45 @@ class PredictionService:
             else:
                 model_choice = available[0]
 
-        model = self.load_model(model_choice)
+        # ── STEP 1: Domain Knowledge Probability (always runs, deterministic) ──────
+        # This is clinically grounded and doesn't depend on the ML model loading.
+        # It is ALWAYS used as the final probability — the GNN/sklearn output is a
+        # secondary signal that is only trusted when it agrees with clinical evidence.
+        dk_prob = self._domain_knowledge_probability(patient_data)
 
-        if 'graphsage' in model_choice:
-            # Single node inference (empty edge index)
-            empty_edge_index = torch.empty((2, 0), dtype=torch.long)
-            x_tensor = torch.tensor(X_scaled, dtype=torch.float32)
-            with torch.no_grad():
-                logits = model(x_tensor, empty_edge_index)
-                gnn_raw = float(torch.sigmoid(logits).item())
-            # Flip — synthetic-data GNN has inverted labels
-            gnn_prob = 1.0 - gnn_raw
+        # ── STEP 2: Attempt ML model inference ────────────────────────────────────
+        try:
+            model = self.load_model(model_choice)
 
-            # Compute clinically-grounded domain knowledge probability
-            dk_prob = self._domain_knowledge_probability(patient_data)
-
-            # Smart override: if GNN and domain knowledge strongly disagree,
-            # trust domain knowledge (GNN was trained on synthetic data with weak correlations)
-            disagreement = abs(gnn_prob - dk_prob)
-            if disagreement > 0.30:
-                # Strong disagreement → domain knowledge wins
-                prob = round(dk_prob, 4)
+            if 'graphsage' in model_choice:
+                empty_edge_index = torch.empty((2, 0), dtype=torch.long)
+                x_tensor = torch.tensor(X_scaled, dtype=torch.float32)
+                with torch.no_grad():
+                    logits = model(x_tensor, empty_edge_index)
+                    gnn_raw = float(torch.sigmoid(logits).item())
+                # Synthetic-data GNN has inverted labels — flip
+                ml_prob = 1.0 - gnn_raw
             else:
-                # Agreement within 0.3 → weighted blend (25% GNN, 75% clinical)
-                prob = round(0.25 * gnn_prob + 0.75 * dk_prob, 4)
+                ml_prob = float(model.predict_proba(X_scaled)[0, 1])
 
-            method_used = "Domain Knowledge Risk Scoring (Clinical Evidence-Based)"
-            contributions = self._domain_knowledge_explanation(patient_data, feature_cols, prob)
-        else:
-            prob = float(model.predict_proba(X_scaled)[0, 1])
-            explanation = self.explainer.compute_shap_explanation(
-                model=model,
-                x_patient=X_scaled
-            )
-            method_used = explanation["method"]
-            contributions = explanation["feature_contributions"]
+            # Only use ML signal when it AGREES with domain knowledge (within 0.25)
+            disagreement = abs(ml_prob - dk_prob)
+            if disagreement <= 0.25:
+                prob = round(0.20 * ml_prob + 0.80 * dk_prob, 4)
+            else:
+                # Strong disagreement → trust clinical domain knowledge only
+                prob = round(dk_prob, 4)
 
+        except Exception as e:
+            # GNN failed to load (e.g. OOM on free tier) → use domain knowledge only
+            print(f"[PredictionService] ML model inference failed: {e}. Using domain knowledge.")
+            prob = round(dk_prob, 4)
 
-        # Risk categorization
+        # ── STEP 3: Explanation ───────────────────────────────────────────────────
+        method_used = "Domain Knowledge Risk Scoring (Clinical Evidence-Based)"
+        contributions = self._domain_knowledge_explanation(patient_data, feature_cols, prob)
+
+        # ── STEP 4: Risk category ─────────────────────────────────────────────────
         if prob < 0.30:
             risk_category = "Low Risk"
         elif prob < 0.60:
@@ -290,8 +291,8 @@ class PredictionService:
         else:
             risk_category = "High Risk"
 
-
         predicted_class = 1 if prob >= 0.5 else 0
+
 
         # Top risk & protective factors
         top_risk = [f for f, v in contributions.items() if v > 0][:3]
