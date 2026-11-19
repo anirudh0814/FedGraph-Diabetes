@@ -199,11 +199,14 @@ class PredictionService:
             if feat == 'BMI':
                 norm = max(0.0, (val - 25.0) / 50.0)
 
-            # Contribution direction
+            # Bidirectional contribution formula:
+            # risk_if_high=True:  value=1 → positive/red (risk), value=0 → negative/green (protective)
+            # risk_if_high=False: value=0 → positive/red (risk), value=1 → negative/green (protective)
+            # Using (norm - 0.5) * 2 maps [0,1] → [-1, +1] giving full bidirectional range
             if cfg['risk_if_high']:
-                contrib = norm * cfg['weight'] * scale
+                contrib = (norm - 0.5) * 2.0 * cfg['weight'] * scale
             else:
-                contrib = -(norm * cfg['weight'] * scale)
+                contrib = (0.5 - norm) * 2.0 * cfg['weight'] * scale
 
             contributions[feat] = round(contrib, 4)
 
